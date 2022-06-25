@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -ue
+
+ensure_files() {
+	for path in "$@"; do
+		if [ ! -f "$path" ]; then
+			printf "no such file: %s\n" "$path"
+			exit 1
+		fi
+	done
+}
+
+trim_space() {
+	cat | sed -E "s/^ +//g" | sed -E "s/ +$//g"
+}
+
+if [ "$#" -ne 2 ]; then
+	echo "usage: $0 <source-file> <variables-file>"
+	exit 1
+fi
+
+source_path="$1"
+vars_path="$2"
+
+ensure_files "$source_path" "$vars_path"
+
+id="$(cat /dev/urandom | head -c 32 | od -An -x | tr -d " \n")"
+subst_symbol="[[$id]]"
+
+source="$(cat "$source_path")"$'\n'
+dollar_substituted="${source//'$$'/"$subst_symbol"}"
+
+var_replaced="$dollar_substituted"
+
+while read line; do
+	if [[ "$line" =~ ^[[:space:]]*\# ]]; then
+		continue
+	fi
+	name="$(cut -d "=" -f 1 <<< "$line" | trim_space)"
+	value="$(cut -d "=" -f 2- <<< "$line" | trim_space)"
+	var_replaced="${var_replaced//'${'"$name"'}'/"$value"}"
+done < "$vars_path"
+
+dollar_restored="${var_replaced//"$subst_symbol"/'$'}"
+
+printf "%s" "$dollar_restored"
