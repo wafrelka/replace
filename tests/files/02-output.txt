@@ -1,0 +1,2 @@
+foo${qux}baz
+foo${bar}baz
