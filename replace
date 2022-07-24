@@ -1,52 +1,59 @@
 #!/bin/bash
 
-set -ue
+set -ueo pipefail
 
-ensure_files() {
-	for path in "$@"; do
-		if [ ! -f "$path" ] && [ "$path" != "-" ]; then
-			printf "no such file: %s\n" "$path"
-			exit 1
-		fi
-	done
+error() {
+    printf "%s\n" "$*" >&2
+}
+
+ensure_file() {
+    for path in "$@"; do
+        if [ ! -f "${path}" ] && [ "${path}" != "-" ]; then
+            error "no such file: ${path}"
+            exit 1
+        fi
+    done
 }
 
 trim_space() {
-	cat | sed -E "s/^ +//g" | sed -E "s/ +$//g"
+    cat | sed -E "s/^ +//g" | sed -E "s/ +$//g"
 }
 
 generate_symbol() {
-	local id="$(cat /dev/urandom | head -c 32 | od -An -x | tr -d " \n")"
-	printf "[[%s]]" "$id"
+    local id
+    id="$(head -c 32 < /dev/urandom | od -An -x | tr -d " \n")"
+    printf "[[%s]]" "${id}"
+}
+
+replace() {
+    printf "%s" "${1//"$2"/"$3"}"
 }
 
 if [ "$#" -ne 2 ]; then
-	echo "usage: $0 <source-file> <variables-file>"
-	exit 1
+    error "usage: $0 <source-file> <variables-file>"
+    exit 1
 fi
 
 source_path="$1"
 vars_path="$2"
 
-ensure_files "$source_path" "$vars_path"
-escaped_dollar_symbol="$(generate_symbol)"
-opening_dollar_symbol="$(generate_symbol)"
+ensure_file "${source_path}" "${vars_path}"
+dollar_sym="$(generate_symbol)"
+open_sym="$(generate_symbol)"
 
-source="$(cat "$source_path")"$'\n'
-dollar_substituted="${source//'$$'/"$escaped_dollar_symbol"}"
-dollar_substituted="${dollar_substituted//'$'/"$opening_dollar_symbol"}"
+text="$(cat "${source_path}")"$'\n'
+text="$(replace "${text}" '$$' "${dollar_sym}")"
+text="$(replace "${text}" '$' "${open_sym}")"
 
-var_replaced="$dollar_substituted"
+while read -r line; do
+    if [[ "${line}" =~ ^[[:space:]]*\# ]]; then
+        continue
+    fi
+    name="$(cut -d = -f 1 <<< "${line}" | trim_space)"
+    value="$(cut -d = -f 2- <<< "${line}" | trim_space)"
+    text="$(replace "${text}" "${open_sym}{${name}}" "${value}")"
+done < "${vars_path}"
 
-while read line; do
-	if [[ "$line" =~ ^[[:space:]]*\# ]]; then
-		continue
-	fi
-	name="$(cut -d "=" -f 1 <<< "$line" | trim_space)"
-	value="$(cut -d "=" -f 2- <<< "$line" | trim_space)"
-	var_replaced="${var_replaced//"$opening_dollar_symbol"'{'"$name"'}'/"$value"}"
-done < "$vars_path"
+text="$(replace "${text}" "${dollar_sym}" '$')"
 
-dollar_restored="${var_replaced//"$escaped_dollar_symbol"/'$'}"
-
-printf "%s" "$dollar_restored"
+printf "%s" "${text}"

@@ -1,34 +1,27 @@
 #!/bin/bash
 
-set -ue
+set -ueo pipefail
 
-VERBOSE=""
-if [ "$#" -ge 1 ] && ([ "$1" = "-v" ] || [ "$1" = "--verbose" ]); then
-    VERBOSE="1"
-fi
+HERE="$(dirname "$(readlink -f "$0")")"
+REPLACE="$(readlink -f "${HERE}/../replace")"
 
-HERE="$(dirname "$(realpath "$0")")"
-REPLACE="$(realpath "$HERE/../replace")"
+for src_path in "${HERE}/files/"*"-source.txt"; do
 
-for src_path in "$HERE/files/"*"-source.txt"; do
-
-    src_fname="$(basename "$src_path")"
-    src_dir="$(dirname "$src_path")"
+    src_fname="$(basename "${src_path}")"
+    src_dir="$(dirname "${src_path}")"
 
     name="${src_fname%"-source.txt"}"
-    vars_path="$src_dir/$name-vars.txt"
-    output_path="$src_dir/$name-output.txt"
+    vars_path="${src_dir}/${name}-vars.txt"
+    output_path="${src_dir}/${name}-output.txt"
 
-    expected="$(cat "$output_path")"
-    actual="$("$REPLACE" "$src_path" "$vars_path")"
+    expected="$(cat "${output_path}")"
+    actual="$("${REPLACE}" "${src_path}" "${vars_path}")"
 
-    if [ "$expected" = "$actual" ]; then
-        printf "%s: PASS\n" "$name"
+    if [ "${expected}" = "${actual}" ]; then
+        printf "%s: PASS\n" "${name}" >&2
     else
-        printf "%s: FAILED\n" "$name"
-        if [ -n "$VERBOSE" ]; then
-            diff -u --label expected --label actual <(cat <<<"$expected") <(cat <<<"$actual")
-        fi
+        printf "%s: FAILED\n" "${name}" >&2
+        diff -u --label expected --label actual <(cat <<< "${expected}") <(cat <<< "${actual}")
         exit 1
     fi
 
