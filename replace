@@ -4,7 +4,7 @@ set -ue
 
 ensure_files() {
 	for path in "$@"; do
-		if [ ! -f "$path" ]; then
+		if [ ! -f "$path" ] && [ "$path" != "-" ]; then
 			printf "no such file: %s\n" "$path"
 			exit 1
 		fi
